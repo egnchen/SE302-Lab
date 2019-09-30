@@ -30,11 +30,11 @@ class Parser : public ParserBase {
   void print();
   void exceptionHandler(std::exception const &exc);
 
-  void executeAction__(int ruleNr);
-  void errorRecovery__();
-  void nextCycle__();
-  void nextToken__();
-  void print__();
+  void executeAction_(int ruleNr);
+  void errorRecovery_();
+  void nextCycle_();
+  void nextToken_();
+  void print_();
 };
 
 #endif  // TIGER_PARSE_PARSER_H_
