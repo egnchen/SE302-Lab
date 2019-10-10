@@ -117,17 +117,17 @@ function        {adjust(); return Parser::FUNCTION;}
 \n {adjust(); errormsg.Newline();}
 
  /* handle comments */
-"/\*"  {adjustStr(); commentLevel_ = 1; begin(StartCondition_::COMMENT);}
+"/\*"  {adjustStr(); commentLevel_ = 1; begin(StartCondition__::COMMENT);}
 <COMMENT> {
-  "\*/"  {adjustStr(); if(--commentLevel_ == 0) begin(StartCondition_::INITIAL); }
+  "\*/"  {adjustStr(); if(--commentLevel_ == 0) begin(StartCondition__::INITIAL); }
   "/\*" {adjustStr(); commentLevel_++;}
   \n    {adjustStr();}
   .     {adjustStr();}
 } 
  /* handle strings */
-\"    {adjustStr(); stringBuf_.clear(); parsedStringLength_ = 0; begin(StartCondition_::STR);}
+\"    {adjustStr(); stringBuf_.clear(); parsedStringLength_ = 0; begin(StartCondition__::STR);}
 <STR> {
-  \"    {adjustStr(); errormsg.tokPos = charPos_ - (parsedStringLength_ + 1); setMatched(stringBuf_); begin(StartCondition_::INITIAL); return Parser::STRING; }
+  \"    {adjustStr(); errormsg.tokPos = charPos_ - (parsedStringLength_ + 1); setMatched(stringBuf_); begin(StartCondition__::INITIAL); return Parser::STRING; }
   .     {stringBuf_ += matched(); adjustStr();}
   \\n   {stringBuf_ += '\n'; adjustStr();}
   \\t   {stringBuf_ += '\t'; adjustStr();}

@@ -19,19 +19,19 @@ class Scanner : public ScannerBase {
   int lex();
 
  private:
-  int lex_();
-  int executeAction_(size_t ruleNr);
+  int lex__();
+  int executeAction__(size_t ruleNr);
 
   void print();
   void preCode();
-  void postCode(PostEnum_ type);
+  void postCode(PostEnum__ type);
   void adjust();
   void adjustStr();
 
   int commentLevel_;
   std::string stringBuf_;
-  int parsedStringLength_;
   int charPos_;
+  int parsedStringLength_ = 0;
 };
 
 inline Scanner::Scanner(std::istream &in, std::ostream &out)
@@ -40,17 +40,17 @@ inline Scanner::Scanner(std::istream &in, std::ostream &out)
 inline Scanner::Scanner(std::string const &infile, std::string const &outfile)
     : ScannerBase(infile, outfile), charPos_(1) {}
 
-inline int Scanner::lex() { return lex_(); }
+inline int Scanner::lex() { return lex__(); }
 
 inline void Scanner::preCode() {
   // optionally replace by your own code
 }
 
-inline void Scanner::postCode(PostEnum_ type) {
+inline void Scanner::postCode(PostEnum__ type) {
   // optionally replace by your own code
 }
 
-inline void Scanner::print() { print_(); }
+inline void Scanner::print() { print__(); }
 
 inline void Scanner::adjust() {
   errormsg.tokPos = charPos_;
