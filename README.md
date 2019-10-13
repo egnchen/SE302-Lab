@@ -8,8 +8,8 @@
   - [Difference Between C Labs and C++ Labs](#difference-between-c-labs-and-c-labs)
   - [Getting Newly Released Labs](#getting-newly-released-labs)
   - [Installing Dependencies](#installing-dependencies)
-    - [Ubuntu](#ubuntu)
-    - [MacOS or Windows](#macos-or-windows)
+    - [Ubuntu18.04](#ubuntu1804)
+    - [MacOS, Windows Professional, Ubuntu16.04, and other Linux Distributions](#macos-windows-professional-ubuntu1604-and-other-linux-distributions)
   - [Compiling](#compiling)
   - [Debugging](#debugging)
   - [Grading Your Labs](#grading-your-labs)
@@ -46,22 +46,33 @@ The Tiger Compiler Labs are not perfect, but we have tried our best and spent a 
    git pull origin https://ipads.se.sjtu.edu.cn:1312/lab/tiger-compiler-2019-fall.git master
    ```
 
-**Note:** You may need to do some code merging work.
+   And then check the content of `VERSION` file and make sure that the lab environment in your local computer is new enough.
+
+**Notice:** You may need to do some code merging work.
 
 ## Installing Dependencies
 
 flexc++ and bisonc++ will be needed in lab2 and later.
 Although these libraries are not needed in lab1, you have to install them before you start lab1.
 
-### Ubuntu
+**Notice:**: Now we only support the following version of flexc++ and bisonc++:
+
+```bash
+flexc++ - V2.06.02
+bisonc++ - V6.01.00
+```
+
+### Ubuntu18.04
 
 ```bash
 sudo apt install git tar cmake g++ gcc gdb flexc++ bisonc++
 ```
 
-### MacOS or Windows
+**Notice:** This series of labs now only support Ubuntu18.04. For those who use **Ubuntu16.04**, you still need to use Docker to build and run your labs.
 
-For students who use MacOS or Windows, we provide you a Docker image which has already installed all the dependencies. You can compile your codes directly in this Docker image.
+### MacOS, Windows Professional, Ubuntu16.04, and other Linux Distributions
+
+We provide you a Docker image which has already installed all the dependencies. You can compile your codes directly in this Docker image.
 
 1. Install [Docker](https://docs.docker.com/).
 
@@ -78,6 +89,8 @@ For students who use MacOS or Windows, we provide you a Docker image which has a
     docker run -it --privileged -v /path/to/tiger-compiler-2019-fall:/home/stu/tiger-compiler-2019-fall se302/tigerlabs_env:latest /bin/bash
     cd tiger-compiler-2019-fall
     ```
+
+**Notice:** Please do not use Docker Toolbox. For those who Windows Home, you still use virtual machine instead and install a Ubuntu18.04 image.
 
 ## Compiling
 
@@ -136,3 +149,26 @@ gdb test_xxx # e.g. `gdb test_slp`
         autocrlf = false
         safecrlf = true
     ```
+
+2. How can I get the root privilege in the docker container?
+
+   ***Solution:*** Modify docker file and rebuild the docker image.
+
+   ```dockerfile
+   FROM ubuntu:18.04
+
+   # Use aliyun registry
+   RUN  sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list
+   RUN  apt-get clean
+
+   RUN apt-get update && apt-get install -y git cmake g++ gcc vim tar gdb flexc++ bisonc++
+
+   WORKDIR /root
+   ```
+
+   And run the command:
+
+   ```bash
+   docker run -it --privileged -v /path/to/tiger-compiler-2019-fall:/root/tiger-compiler-2019-fall se302/tigerlabs_env:latest /bin/bash
+   cd tiger-compiler-2019-fall
+   ```
