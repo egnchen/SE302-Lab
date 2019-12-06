@@ -85,9 +85,9 @@ add_dependencies(test_parse lex_parse_sources)
 add_executable(test_semant  "src/tiger/main/test_semant.cc" ${TIGER_SOURCES} ${TIGER_LEX_PARSE_SOURCES})
 add_dependencies(test_semant lex_parse_sources)
 
-# lab 5
-add_executable(test_translate  "src/tiger/main/test_translate.cc" ${TIGER_SOURCES} ${TIGER_LEX_PARSE_SOURCES})
-add_dependencies(test_translate lex_parse_sources)
+# # lab 5
+# add_executable(test_translate  "src/tiger/main/test_translate.cc" ${TIGER_SOURCES} ${TIGER_LEX_PARSE_SOURCES})
+# add_dependencies(test_translate lex_parse_sources)
 
 # lab 6
 add_executable(tiger-compiler  "src/tiger/main/main.cc" ${TIGER_SOURCES} ${TIGER_LEX_PARSE_SOURCES})

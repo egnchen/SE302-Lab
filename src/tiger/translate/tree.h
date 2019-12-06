@@ -70,8 +70,8 @@ class SeqStm : public Stm {
  public:
   Stm *left, *right;
 
-  SeqStm(Stm* left, Stm* right) : Stm(SEQ), left(left), right(right) {
-    assert(left);
+  SeqStm(Stm* left, Stm* right, bool warning=true) : Stm(SEQ), left(left), right(right) {
+    assert(!warning || left);
   }
   void Print(FILE* out, int d) const override;
 

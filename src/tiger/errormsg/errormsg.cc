@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <cassert>
 
 EM::ErrorMsg errormsg;
 namespace EM {
@@ -17,6 +18,7 @@ void ErrorMsg::Error(int pos, std::string message, ...) {
   va_list ap;
   IntList *lines = linePos;
   int num = lineNum;
+  assert(0);
 
   anyErrors = true;
   while (lines && lines->i >= pos) {

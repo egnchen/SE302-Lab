@@ -26,9 +26,9 @@ void do_proc(FILE* out, F::ProcFrag* procFrag) {
   temp_map = TEMP::Map::Empty();
   // Init temp_map
 
-  //  printf("doProc for function %s:\n", this->frame->label->Name().c_str());
-  //  (new T::StmList(proc->body, nullptr))->Print(stdout);
-  //  printf("-------====IR tree=====-----\n");
+  printf("doProc for function %s:\n", procFrag->frame->label->Name().c_str());
+  (new T::StmList(procFrag->body, nullptr))->Print(stdout);
+  printf("-------====IR tree=====-----\n");
 
   T::StmList* stmList = C::Linearize(procFrag->body);
   //  stmList->Print(stdout);

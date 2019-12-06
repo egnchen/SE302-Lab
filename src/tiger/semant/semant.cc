@@ -207,7 +207,7 @@ TY::Ty *RecordExp::SemAnalyze(VEnvType venv, TEnvType tenv,
 
 TY::Ty *SeqExp::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
   // sequentially type check everything
-  TY::Ty *ret;
+  TY::Ty *ret = nullptr;
   for(A::ExpList *exps = this->seq; exps; exps = exps->tail) {
     ret = exps->head->SemAnalyze(venv, tenv, labelcount);
   }
@@ -417,6 +417,7 @@ void TypeDec::SemAnalyze(VEnvType venv, TEnvType tenv, int labelcount) const {
     old_ty->ty = new_ty;
   }
   // check illegal type cycles
+  // TODO this impl have bugs, may produce infinite cycle
   for(auto decs = this->types; decs; decs = decs->tail) {
     auto dec = decs->head;
     TY::NameTy *orig = static_cast<TY::NameTy *>(tenv->Look(dec->name));
