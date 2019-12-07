@@ -3,8 +3,8 @@
 namespace RA {
 
 Result RegAlloc(F::Frame* f, AS::InstrList* il) {
-  // TODO: Put your codes here (lab6).
-  assert(0);
+  // lab5: escape all registers
+  
   return Result();
 }
 

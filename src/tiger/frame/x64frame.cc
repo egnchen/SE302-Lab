@@ -1,113 +1,83 @@
 #include "tiger/frame/frame.h"
 #include "tiger/translate/translate.h"
 #include "tiger/codegen/assem.h"
+#include "tiger/frame/frame.h"
+#include "tiger/frame/x64frame.h"
+#include "tiger/codegen/assem.h"
 #include <string>
 
 namespace F {
 
-
 // frag allocator
 FragList *FragAllocator::frag_head = nullptr;
 
-class InFrameAccess : public Access {
- public:
-  int offset;
+// pre-allocate all these registers
+TEMP::Temp *const X64Frame::rsp = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rbp = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rdi = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rsi = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rdx = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rcx = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::r8  = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::r9  = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rax = TEMP::Temp::NewTemp();
 
-  InFrameAccess(int offset) : Access(INFRAME), offset(offset) {}
-  T::Exp *toExp(T::Exp *framePtr) const {
-    return new T::MemExp(new T::BinopExp(T::PLUS_OP,
-      framePtr, new T::ConstExp(offset)));
-  }
+TEMP::Temp *const X64Frame::rbx = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::r10 = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::r11 = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::r12 = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::r13 = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::r14 = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::r15 = TEMP::Temp::NewTemp();
+
+TEMP::Temp *X64Frame::srbx,
+  *X64Frame::srbp,
+  *X64Frame::sr12,
+  *X64Frame::sr13,
+  *X64Frame::sr14,
+  *X64Frame::sr15;
+
+// for passing parameters
+TEMP::Temp *const X64Frame::param_regs[6] = {
+  rdi, rsi, rdx, rcx, r8, r9
 };
 
-class InRegAccess : public Access {
- public:
-  TEMP::Temp* reg;
+// caller saved registers
+typedef TEMP::TempList TL;
+TL *const X64Frame::caller_saved =
+  new TL(rax, new TL(rdi, new TL(rsi,
+    new TL(rdx, new TL(rcx,
+      new TL(r8, new TL(r9, nullptr)))))));
 
-  InRegAccess(TEMP::Temp* reg) : Access(INREG), reg(reg) {}
-  T::Exp *toExp(T::Exp *framePtr) const {
-    return new T::TempExp(reg);
+// temp map
+TEMP::Map *X64Frame::getTempMap()
+{
+  static TEMP::Map *temp_map = nullptr;
+  if(temp_map == nullptr)
+  {
+    temp_map = TEMP::Map::Empty();
+    temp_map->Enter(rsp, new std::string("%rsp"));
+    temp_map->Enter(rbp, new std::string("%rbp"));
+    temp_map->Enter(rdi, new std::string("%rdi"));
+    temp_map->Enter(rsi, new std::string("%rsi"));
+    temp_map->Enter(rdx, new std::string("%rdx"));
+    temp_map->Enter(rcx, new std::string("%rcx"));
+    temp_map->Enter(r8, new std::string("%r8"));
+    temp_map->Enter(r9, new std::string("%r9"));
+    temp_map->Enter(rax, new std::string("%rax"));
+    temp_map->Enter(rbx, new std::string("%rbx"));
+    temp_map->Enter(r10, new std::string("%r10"));
+    temp_map->Enter(r11, new std::string("%r11"));
+    temp_map->Enter(r12, new std::string("%r12"));
+    temp_map->Enter(r13, new std::string("%r13"));
+    temp_map->Enter(r14, new std::string("%r14"));
+    temp_map->Enter(r15, new std::string("%r15"));
   }
-};
+  return temp_map;
+}
 
-
-//caller_saved register: rax rdi rsi rdx rcx r8 r9 r10 r11
-//callee_saved register: rbx rbp r12 r13 r14 r15 
-
-class X64Frame : public Frame {
-  // frame implemented in lab5
-private:
-  int size = 0;
-  AccessList *formals = nullptr;
-  T::StmList *view_shift;
-  static const int param_reg_count;
-  // registers for function calling
-  static TEMP::Temp *const rsp;
-  static TEMP::Temp *const rdi;
-  static TEMP::Temp *const rsi;
-  static TEMP::Temp *const rdx;
-  static TEMP::Temp *const rcx;
-  static TEMP::Temp *const r8;
-  static TEMP::Temp *const r9;
-  static TEMP::Temp *const param_regs[6];
-
-  static TEMP::Temp *const rax; // for return value
-public:
-
-  X64Frame(TEMP::Label *name): Frame(name) {}
-  X64Frame(TEMP::Label *name, U::BoolList *formals);
-  ~X64Frame() {}
-  Access *allocSpace(unsigned byte_count) {
-    int ret = size;
-    size += byte_count;
-    return new InFrameAccess(ret);
-  }
-  
-  T::Exp *getFramePointerExp() { return new T::TempExp(rsp); }
-  TEMP::Temp *getFramePointer() { return rsp; }
-  
-  T::Exp *getReturnValueExp() { return new T::TempExp(rax); }
-  TEMP::Temp *getReturnValue() { return rax; }
-  
-  T::CallExp *externalCall(std::string name, T::ExpList *args) {
-    return new T::CallExp(
-      new T::NameExp(TEMP::NamedLabel(name)), args);
-  }
-
-  void doProcEntryExit1(T::Exp *body) {
-    // save every passed in parameter to their desired location
-    // in regfile or on stack
-    // already constructed, so just concat it
-
-    // construct SeqStm from StmList
-    T::StmList *f = view_shift;
-    T::SeqStm *prehead = new T::SeqStm(nullptr, nullptr, false);
-    T::SeqStm *t = prehead;
-    while(f) {
-      t->right = new T::SeqStm(f->head, nullptr);
-      t = static_cast<T::SeqStm *>(t->right);
-      f = f->tail;
-    }
-    // save return value in %rax
-    T::Stm *ret_stm = new T::MoveStm(getReturnValueExp(), body);
-    t->right = ret_stm;
-    F::FragAllocator::appendFrag(new ProcFrag(prehead->right, this));
-  }
-
-  AS::InstrList *doProcEntryExit2(AS::InstrList *instr) {
-    return nullptr;
-  }
-
-  AS::Proc *doProcEntryExit3(AS::InstrList *instr) {
-    return nullptr;
-  }
-
-  void onEnter() {}
-  void onReturn() {}
-
-  unsigned getSize() { return (unsigned)size; }
-  AccessList *getFormals() { return formals; }
-};
+constexpr int X64Frame::param_reg_count =
+  sizeof(param_regs) / sizeof(param_regs[0]);
 
 X64Frame::X64Frame(TEMP::Label *name, U::BoolList *formals)
   :Frame(name)
@@ -180,26 +150,80 @@ X64Frame::X64Frame(TEMP::Label *name, U::BoolList *formals)
   this->view_shift = view_shift_prehead->tail;
 }
 
+
+void X64Frame::doProcEntryExit1(T::Exp *body) {
+  // this phase is done during IR translation
+  // save every passed in parameter to their desired location
+  // already constructed, so just concat it
+
+  // construct SeqStm from StmList
+  T::StmList *f = view_shift;
+  T::SeqStm *prehead = new T::SeqStm(nullptr, nullptr, false);
+  T::SeqStm *t = prehead;
+  while(f) {
+    t->right = new T::SeqStm(f->head, nullptr);
+    t = static_cast<T::SeqStm *>(t->right);
+    f = f->tail;
+  }
+  // save return value in %rax
+  T::Stm *ret_stm = new T::MoveStm(getReturnValueExp(), body);
+  t->right = ret_stm;
+  F::FragAllocator::appendFrag(new ProcFrag(prehead->right, this));
+}
+
+AS::InstrList *X64Frame::doProcEntryExit2(AS::InstrList *instr)
+{
+  // this phase is right after codegen to prepare for liveness analysis
+  // add a psudo instruction and modify liveness of registers
+  // at the end of all assembly code
+  static TEMP::TempList *return_sink =
+    new TEMP::TempList(getR0(), new TEMP::TempList(getReturnValue(),
+      new TEMP::TempList(getFramePointer(), nullptr)));
+  return AS::InstrList::Splice(instr,
+    new AS::InstrList(
+      new AS::OperInstr("", nullptr, return_sink, nullptr), nullptr));
+}
+
+AS::Proc *X64Frame::doProcEntryExit3(AS::InstrList *instr)
+{
+  // this phase is after register allocation
+  // at this time the frame size is determined
+  // add code to expand/shrink frame here
+  return nullptr;
+}
+
+void X64Frame::onEnter(CG::ASManager &a) const
+{
+  // save callee-save registers
+  srbx = TEMP::Temp::NewTemp();
+  // srbp = TEMP::Temp::NewTemp();
+  sr12 = TEMP::Temp::NewTemp();
+  sr13 = TEMP::Temp::NewTemp();
+  sr14 = TEMP::Temp::NewTemp();
+  sr15 = TEMP::Temp::NewTemp();
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(srbx, nullptr),new TEMP::TempList(rbx, nullptr)));
+  // a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(srbp, nullptr),new TEMP::TempList(rbp, nullptr)));
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(sr12, nullptr),new TEMP::TempList(r12, nullptr)));
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(sr13, nullptr),new TEMP::TempList(r13, nullptr)));
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(sr14, nullptr),new TEMP::TempList(r14, nullptr)));
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(sr15, nullptr),new TEMP::TempList(r15, nullptr)));
+}
+
+void X64Frame::onReturn(CG::ASManager &a) const
+{
+  // restore them
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(rbx,NULL), new TEMP::TempList(srbx,NULL)));
+  // a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(rbp,NULL), new TEMP::TempList(srbp,NULL)));
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(r12,NULL), new TEMP::TempList(sr12,NULL)));
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(r13,NULL), new TEMP::TempList(sr13,NULL)));
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(r14,NULL), new TEMP::TempList(sr14,NULL)));
+  a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(r15,NULL), new TEMP::TempList(sr15,NULL)));
+};
+
 Frame *NewFrame(TEMP::Label *name, U::BoolList *formals)
 {
   return new X64Frame(name, formals);
 }
-
-// pre-allocate all these registers
-TEMP::Temp *const X64Frame::rsp = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::rdi = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::rsi = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::rdx = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::rcx = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::r8  = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::r9  = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::rax = TEMP::Temp::NewTemp();
-
-TEMP::Temp *const X64Frame::param_regs[6] = {
-  rdi, rsi, rdx, rcx, r8, r9
-};
-
-constexpr int X64Frame::param_reg_count = sizeof(param_regs) / sizeof(param_regs[0]);
 
 AS::Proc *F_procEntryExit3(Frame *frame, AS::InstrList *alloc)
 {

@@ -7,11 +7,16 @@
 #include "tiger/translate/tree.h"
 #include "tiger/translate/translate.h"
 #include "tiger/util/util.h"
+#include "tiger/codegen/codegen.h"
 
 // forward declaration
 namespace AS {
 class Proc;
 class InstrList;
+}
+
+namespace CG {
+class ASManager;
 }
 
 namespace F {
@@ -49,11 +54,16 @@ public:
   // default to allocate a word
   virtual Access *allocSpace(unsigned byte_count) = 0;
   // frame pointer
-  virtual T::Exp *getFramePointerExp() = 0;
-  virtual TEMP::Temp *getFramePointer() = 0;
+  virtual  T::Exp *getFramePointerExp() const = 0;
+  virtual TEMP::Temp *getFramePointer() const = 0;
+  // stack pointer
+  virtual T::Exp *getStackPointerExp() const = 0;
+  virtual TEMP::Temp *getStackPointer() const = 0;
   // return value
-  virtual TEMP::Temp *getReturnValue() = 0;
-  virtual T::Exp *getReturnValueExp() = 0;
+  virtual TEMP::Temp *getReturnValue() const = 0;
+  virtual T::Exp *getReturnValueExp() const = 0;
+
+  virtual TEMP::Temp *getR0() const = 0;
   // function calls
   
   // proc entry exit 1
@@ -67,8 +77,8 @@ public:
   virtual unsigned getSize() = 0;
   virtual AccessList *getFormals() = 0;
 
-  virtual void onEnter() = 0;
-  virtual void onReturn() = 0;
+  virtual void onEnter(CG::ASManager &) const = 0;
+  virtual void onReturn(CG::ASManager &) const = 0;
 };
 
 // default frame allocator

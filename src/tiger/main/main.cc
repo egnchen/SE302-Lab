@@ -12,6 +12,7 @@
 #include "tiger/parse/parser.h"
 #include "tiger/regalloc/regalloc.h"
 #include "tiger/translate/tree.h"
+#include "tiger/frame/x64frame.h"
 
 extern EM::ErrorMsg errormsg;
 
@@ -45,13 +46,11 @@ void do_proc(FILE* out, F::ProcFrag* procFrag) {
 
   // lab5&lab6: code generation
   AS::InstrList* iList = CG::Codegen(procFrag->frame, stmList); /* 9 */
-  //  AS_printInstrList(stdout, iList, Temp::Map::LayerMap(temp_map,
-  //  Temp_name()));
-
+  iList->Print(stdout, F::X64Frame::getTempMap());
   // lab6: register allocation
-  //  printf("----======before RA=======-----\n");
+  printf("----======before RA=======-----\n");
   RA::Result allocation = RA::RegAlloc(procFrag->frame, iList); /* 11 */
-  //  printf("----======after RA=======-----\n");
+  printf("----======after RA=======-----\n");
 
   AS::Proc* proc = F::F_procEntryExit3(procFrag->frame, allocation.il);
 

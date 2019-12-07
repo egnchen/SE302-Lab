@@ -157,7 +157,7 @@ Level *Outermost()
   if (lv != nullptr)
     return lv;
 
-  lv = Level::NewLevel(nullptr, TEMP::NamedLabel("main"), nullptr);
+  lv = Level::NewLevel(nullptr, TEMP::NamedLabel("tigermain"), nullptr);
   return lv;
 }
 
@@ -256,7 +256,7 @@ TR::ExpAndTy SimpleVar::Translate(S::Table<E::EnvEntry> *venv,
     {
       // static link is the first word in frame
       ret = new T::MemExp(
-          new T::BinopExp(T::PLUS_OP, ret, new T::ConstExp(TR::word_size)));
+          new T::BinopExp(T::PLUS_OP, ret, new T::ConstExp(-TR::word_size)));
       level = level->parent;
     }
     ret = env_entry->access->access->toExp(ret);
@@ -374,7 +374,7 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
       // relative to current stack frame
       // TODO figure this out
       static_link = new T::MemExp(
-          new T::BinopExp(T::PLUS_OP, static_link, new T::ConstExp(TR::word_size)));
+          new T::BinopExp(T::PLUS_OP, static_link, new T::ConstExp(-TR::word_size)));
       static_container = static_container->parent;
     }
     // if static container is nullptr, then reached root
