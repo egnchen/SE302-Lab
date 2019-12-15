@@ -1,4 +1,5 @@
 #include "tiger/codegen/assem.h"
+#include <sstream>
 
 namespace {
 
@@ -36,14 +37,28 @@ static std::string format(std::string assem, TEMP::TempList* dst,
         case 's': {
           i++;
           int n = assem.at(i) - '0';
-          std::string* s = m->Look(nth_temp(src, n));
-          result += *s;
+          TEMP::Temp *t = nth_temp(src, n);
+          std::string* s = m->Look(t);
+          if(s == nullptr)
+          {
+            std::ostringstream ss;
+            ss << "_t_" << t->Int();
+            result += ss.str();
+          }
+          else result += *s;
         } break;
         case 'd': {
           i++;
           int n = assem.at(i) - '0';
-          std::string* s = m->Look(nth_temp(dst, n));
-          result += *s;
+          TEMP::Temp *t = nth_temp(dst, n);
+          std::string* s = m->Look(t);
+          if(s == nullptr)
+          {
+            std::ostringstream ss;
+            ss << "_t_" << t->Int();
+            result += ss.str();
+          }
+          else result += *s;
         } break;
         case 'j': {
           i++;

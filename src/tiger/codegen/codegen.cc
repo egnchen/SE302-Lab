@@ -12,22 +12,10 @@ namespace CG {
 const int DEFAULT_STR_SIZE = 32;
 typedef TEMP::TempList TL;
 
-inline char *new_str(int size=DEFAULT_STR_SIZE) {
-  return (char *)malloc(size);
+std::string get_framesize(const F::Frame *f) {
+  return f->label->Name() + "_fs";
 }
 
-ASManager::ASManager() {
-  prehead = new AS::InstrList(nullptr, nullptr);
-  tail = prehead;
-}
-
-void ASManager::emit(AS::Instr *instr) {
-  tail = tail->tail = new AS::InstrList(instr, nullptr);
-}
-
-inline AS::InstrList *ASManager::getHead() { return prehead->tail; }
-
-std::string get_framesize(const F::Frame *f) { return f->label->Name() + "_fs"; }
 std::string get_x8664_pushq() { return "pushq `s0"; }
 std::string get_x8664_movq_mem() { return "movq `s0, (`s1)"; }
 std::string get_x8664_movq_temp() { return "movq `s0, `d0"; }
@@ -37,26 +25,37 @@ std::string get_x8664_movq_imm_temp(int imm)
   ss << "movq $" << imm << ", `d0";
   return ss.str();
 }
-std::string get_x8664_movq_imm_temp(std::string imm) { return "movq " + imm + ", `d0"; }
+std::string get_x8664_movq_imm_temp(std::string imm)
+{
+  return "leaq " + imm + "(%rip), `d0";
+}
 std::string get_x8664_movq_imm_mem(int imm)
 {
   std::ostringstream ss;
-  ss << "movq $" << imm << ", `d0";
+  ss << "movq $" << imm << ", (`s0)";
   return ss.str();
 }
 std::string get_x8664_movq_mem_const_offset(const int offset)
 {
   std::ostringstream ss;
-  ss << "movq "<< offset << "(`s0), (`s1)";
+  ss << "movq `s0, " << offset << "(`s1)";
   return ss.str();
 }
+std::string get_x8664_movq_mem_offset_fp(const int offset, const F::Frame *f)
+{
+  std::ostringstream ss;
+  ss << "movq `s0, (" << offset << '+' << get_framesize(f) << ")(`s1)";
+  return ss.str();
+}
+
+std::string get_x8664_movq_temp_mem() { return "movq (`s0), `d0"; }
 std::string get_x8664_movq_temp_const_offset(const int offset)
 {
   std::ostringstream ss;
-  ss << "movq " << offset << "(`s0), d0";
+  ss << "movq " << offset << "(`s0), `d0";
   return ss.str();
 }
-std::string get_x8664_movq_temp_offset() { return "movq `s0(`s1), `d0"; }
+std::string get_x8664_movq_temp_offset() { return "movq (`s0, `s1), `d0"; }
 std::string get_x8664_movq_temp_offset_fp(const int offset, const F::Frame *f)
 {
   std::ostringstream ss;
@@ -64,7 +63,7 @@ std::string get_x8664_movq_temp_offset_fp(const int offset, const F::Frame *f)
   return ss.str();
 }
 std::string get_x8664_cmp() { return "cmpq `s0, `s1"; }
-std::string get_x8664_fp(const F::Frame *f) { return "leaq (" + get_framesize(f) + ")`s0, `d0"; }
+std::string get_x8664_fp(const F::Frame *f) { return "leaq " + get_framesize(f) + "(`s0), `d0"; }
 std::string get_x8664_cjump(T::RelOp oper)
 {
   std::string op;
@@ -93,6 +92,17 @@ std::string get_x8664_leaq(int offset)
 }
 std::string get_x8664_callq(std::string label) { return "callq " + label; }
 
+ASManager::ASManager() {
+  prehead = new AS::InstrList(nullptr, nullptr);
+  tail = prehead;
+}
+
+void ASManager::emit(AS::Instr *instr) {
+  tail = tail->tail = new AS::InstrList(instr, nullptr);
+}
+
+inline AS::InstrList *ASManager::getHead() { return prehead->tail; }
+
 void munchStm(T::Stm *stm, ASManager &a, const F::Frame *f)
 {
   switch(stm->kind)
@@ -102,33 +112,43 @@ void munchStm(T::Stm *stm, ASManager &a, const F::Frame *f)
       T::MoveStm *move_stm = static_cast<T::MoveStm *>(stm);
       T::Exp *dst = move_stm->dst;
       T::Exp *src = move_stm->src;
-      if(dst->kind == T::Exp::MEM)
-      {
+      if(dst->kind == T::Exp::MEM) {
         T::MemExp *mem_dst = (T::MemExp *)dst;
         T::Exp *addr = mem_dst->exp;
+        // deal with binop here
         if(addr->kind == T::Exp::Kind::BINOP
           && ((T::BinopExp *)addr)->op == T::BinOp::PLUS_OP
           && (((T::BinopExp *)addr)->left->kind == T::Exp::CONST
-            || ((T::BinopExp *)addr)->right->kind == T::Exp::CONST))
-        {
-          // movq s0, offset(s1)
+            || ((T::BinopExp *)addr)->right->kind == T::Exp::CONST)) {
           T::BinopExp *baddr = (T::BinopExp *)addr;
           bool is_left_const = baddr->left->kind == T::Exp::CONST;
           T::ConstExp *c = (T::ConstExp *)(is_left_const ? baddr->left : baddr->right);
           T::Exp *other = is_left_const ? baddr->right : baddr->left;
-          a.emit(new AS::OperInstr(
-            get_x8664_movq_mem_const_offset(c->consti),
-            nullptr,
-            new TL(munchExp(src, a, f),
-              new TL(munchExp(other, a, f), nullptr)),
-            nullptr));
-        }
-        else if(src->kind == T::Exp::CONST)
-        {
+          if(other->kind == T::Exp::TEMP && ((T::TempExp *)other)->temp == f->getFramePointer())
+          {
+            // deal with frame pointer
+            // movq s0, (offset+framesize)(%rsp)
+            a.emit(
+              new AS::OperInstr(get_x8664_movq_mem_offset_fp(c->consti, f),
+                nullptr,
+                new TL(munchExp(src, a, f),
+                  new TL(f->getStackPointer(), nullptr)),
+                nullptr));
+          } else {
+            // regular stuff
+            // movq s0, offset(s1)
+            a.emit(new AS::OperInstr(
+              get_x8664_movq_mem_const_offset(c->consti),
+              nullptr,
+              new TL(munchExp(src, a, f),
+                new TL(munchExp(other, a, f), nullptr)),
+              nullptr));
+          }
+        } else if(src->kind == T::Exp::CONST) {
           // movq $xxx, (s0)
           a.emit(new AS::OperInstr(
             get_x8664_movq_imm_mem(((T::ConstExp *)src)->consti),
-            nullptr, new TL(munchExp(mem_dst, a, f), nullptr), nullptr));
+            nullptr, new TL(munchExp(mem_dst->exp, a, f), nullptr), nullptr));
         }
         else
         {
@@ -138,7 +158,7 @@ void munchStm(T::Stm *stm, ASManager &a, const F::Frame *f)
             get_x8664_movq_mem(),
             nullptr,
             new TL(munchExp(src, a, f),
-              new TL(munchExp(mem_dst, a, f), nullptr)),
+              new TL(munchExp(mem_dst->exp, a, f), nullptr)),
             nullptr
           ));
         }
@@ -150,8 +170,8 @@ void munchStm(T::Stm *stm, ASManager &a, const F::Frame *f)
         T::TempExp *temp_dst = (T::TempExp *)dst;
         a.emit(new AS::MoveInstr(
           get_x8664_movq_temp(),
-          new TL(munchExp(src, a, f), nullptr),
-          new TL(temp_dst->temp, nullptr)
+          new TL(temp_dst->temp, nullptr),
+          new TL(munchExp(src, a, f), nullptr)
         ));
       }
       break;
@@ -180,11 +200,9 @@ void munchStm(T::Stm *stm, ASManager &a, const F::Frame *f)
       T::CjumpStm *cjump_stm = (T::CjumpStm *)stm;
       TEMP::Temp *left = munchExp(cjump_stm->left, a, f),
         *right = munchExp(cjump_stm->right, a, f);
-      a.emit(new AS::OperInstr(
-        get_x8664_cmp(),
-        nullptr,
-        new TL(left, new TL(right, nullptr)),
-        nullptr));
+      a.emit(new AS::OperInstr(get_x8664_cmp(),
+        // watch out for the order here, bro
+        nullptr, new TL(right, new TL(left, nullptr)), nullptr));
       a.emit(new AS::OperInstr(
         get_x8664_cjump(cjump_stm->op),
         nullptr, nullptr,
@@ -201,6 +219,9 @@ void munchStm(T::Stm *stm, ASManager &a, const F::Frame *f)
     case T::Stm::SEQ:
       fputs("SeqExp should be eliminated after canonicalization.\n", stdout);
       break;
+    default:
+      fputs("Reached invalid part of program\n", stdout);
+      assert(0);
   }
 }
 
@@ -234,13 +255,13 @@ TEMP::Temp *munchExp(T::Exp *exp, ASManager &a, const F::Frame *f)
           a.emit(new AS::OperInstr(
             get_x8664_movq_temp_offset_fp(const_exp->consti, f),
             new TL(r, nullptr),
-            new TL(fp_exp->temp, nullptr),
+            new TL(f->getStackPointer(), nullptr),
             nullptr
           ));
         }
         else if(left->kind == T::Exp::CONST || right->kind == T::Exp::CONST)
         {
-          // movq $xxx(%s0), %rt
+          // movq xxx(%s0), %rt
           bool is_left_const = left->kind == T::Exp::CONST;
           T::ConstExp *const_exp = (T::ConstExp *)( is_left_const ? left : right);
           T::TempExp *temp_exp = (T::TempExp *)(is_left_const ? right : left);
@@ -271,7 +292,7 @@ TEMP::Temp *munchExp(T::Exp *exp, ASManager &a, const F::Frame *f)
         // movq (%s0), %rt
         TEMP::Temp *addr_temp = munchExp(addr, a, f);
         a.emit(new AS::OperInstr(
-          get_x8664_movq_mem(),
+          get_x8664_movq_temp_mem(),
           new TL(r, nullptr),
           new TL(addr_temp, nullptr),
           nullptr
@@ -340,8 +361,9 @@ TEMP::Temp *munchExp(T::Exp *exp, ASManager &a, const F::Frame *f)
             new TL(fr->rax, new TL(fr->rdx, nullptr)),
             new TL(fr->rax, nullptr), nullptr));
           a.emit(new AS::OperInstr(get_x8664_idivq(),
+            new TL(fr->rax, new TL(fr->rdx, nullptr)),
             new TL(right_temp, new TL(fr->rax, new TL(fr->rdx, nullptr))),
-            new TL(fr->rax, new TL(fr->rdx, nullptr)), nullptr));
+            nullptr));
           a.emit(new AS::MoveInstr(get_x8664_movq_temp(),
             new TL(r, nullptr), new TL(fr->rax, nullptr)));
         }
@@ -355,7 +377,7 @@ TEMP::Temp *munchExp(T::Exp *exp, ASManager &a, const F::Frame *f)
       if(temp_exp->temp == f->getFramePointer())
       {
         a.emit(new AS::OperInstr(get_x8664_fp(f),
-          new TL(r, nullptr), new TL(temp_exp->temp, nullptr), nullptr));
+          new TL(r, nullptr), new TL(f->getStackPointer(), nullptr), nullptr));
       }
       else r = temp_exp->temp;
       break;

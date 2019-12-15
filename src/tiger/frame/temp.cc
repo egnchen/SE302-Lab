@@ -67,10 +67,7 @@ std::string *Map::Look(Temp *t) {
   else if (this->under)
     return this->under->Look(t);
   else {
-    // return nullptr;
-    std::ostringstream ss;
-    ss << "_t_" << t->Int();
-    return new std::string(ss.str());
+    return nullptr;
   }
 }
 

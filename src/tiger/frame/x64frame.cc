@@ -5,6 +5,7 @@
 #include "tiger/frame/x64frame.h"
 #include "tiger/codegen/assem.h"
 #include <string>
+#include <sstream>
 
 namespace F {
 
@@ -40,6 +41,12 @@ TEMP::Temp *X64Frame::srbx,
 // for passing parameters
 TEMP::Temp *const X64Frame::param_regs[6] = {
   rdi, rsi, rdx, rcx, r8, r9
+};
+
+const TEMP::Temp *const X64Frame::all_regs[16] = 
+{
+  rdi, rsi, rdx, rcx, rax, rbx, rbp, rsp,
+  r8, r9, r10, r11, r12, r13, r14, r15
 };
 
 // caller saved registers
@@ -189,7 +196,13 @@ AS::Proc *X64Frame::doProcEntryExit3(AS::InstrList *instr)
   // this phase is after register allocation
   // at this time the frame size is determined
   // add code to expand/shrink frame here
-  return nullptr;
+  std::ostringstream pro_ss, epi_ss;
+  pro_ss << ".set " << CG::get_framesize(this) << ", " << this->size << std::endl;
+  pro_ss << this->label->Name() << ':' << std::endl;
+  pro_ss << "subq $" << this->size << ", %rsp" << std::endl;
+  epi_ss << "addq $" << this->size << ", %rsp" << std::endl;
+  epi_ss << "ret" << std::endl << std::endl;
+  return new AS::Proc(pro_ss.str(), instr, epi_ss.str());
 }
 
 void X64Frame::onEnter(CG::ASManager &a) const

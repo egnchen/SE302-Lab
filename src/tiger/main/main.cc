@@ -32,8 +32,8 @@ void do_proc(FILE* out, F::ProcFrag* procFrag) {
   printf("-------====IR tree=====-----\n");
 
   T::StmList* stmList = C::Linearize(procFrag->body);
-  //  stmList->Print(stdout);
-  //  printf("-------====Linearlized=====-----\n");  /* 8 */
+  stmList->Print(stdout);
+  printf("-------====Linearlized=====-----\n");  /* 8 */
   struct C::Block blo = C::BasicBlocks(stmList);
   //  C::StmListList* stmLists = blo.stmLists;
   //  for (; stmLists; stmLists = stmLists->tail) {
@@ -50,6 +50,7 @@ void do_proc(FILE* out, F::ProcFrag* procFrag) {
   // lab6: register allocation
   printf("----======before RA=======-----\n");
   RA::Result allocation = RA::RegAlloc(procFrag->frame, iList); /* 11 */
+  allocation.il->Print(stdout, allocation.coloring);
   printf("----======after RA=======-----\n");
 
   AS::Proc* proc = F::F_procEntryExit3(procFrag->frame, allocation.il);
@@ -64,7 +65,7 @@ void do_proc(FILE* out, F::ProcFrag* procFrag) {
                     TEMP::Map::LayerMap(temp_map, allocation.coloring));
   // epilog
   fprintf(out, "%s", proc->epilog.c_str());
-  fprintf(out, ".size %s, .-%s\n", procName.c_str(), procName.c_str());
+  // fprintf(out, ".size %s, .-%s\n", procName.c_str(), procName.c_str());
 }
 
 void do_str(FILE* out, F::StringFrag* strFrag) {

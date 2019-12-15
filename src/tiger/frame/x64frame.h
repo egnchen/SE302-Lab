@@ -72,13 +72,15 @@ public:
   // for register naming
   static TEMP::Map *getTempMap();
 
+  // for utilities
+  static const TEMP::Temp * const all_regs[16];
+
   X64Frame(TEMP::Label *name): Frame(name) {}
   X64Frame(TEMP::Label *name, U::BoolList *formals);
   ~X64Frame() {}
   Access *allocSpace(unsigned byte_count) override {
-    int ret = -size;
     size += byte_count;
-    return new InFrameAccess(ret);
+    return new InFrameAccess(-size);
   }
   
   T::Exp *getFramePointerExp() const override { return new T::TempExp(rbp); }

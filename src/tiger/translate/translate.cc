@@ -198,14 +198,17 @@ T::Stm *makeRecordArray(T::ExpList *fields, T::Exp *r, int offset, int size)
   {
     return new T::SeqStm(
       new T::MoveStm(
-        new T::BinopExp(T::PLUS_OP, r, new T::ConstExp(offset * TR::word_size)),
+        new T::MemExp(
+          new T::BinopExp(T::PLUS_OP,
+            r, new T::ConstExp(offset * TR::word_size))),
         fields->head),
       makeRecordArray(fields->tail, r, offset + 1, size));
   }
   else
   {
     return new T::MoveStm(
-      new T::BinopExp(T::PLUS_OP, r, new T::ConstExp(offset * TR::word_size)),
+      new T::MemExp(new T::BinopExp(
+        T::PLUS_OP, r, new T::ConstExp(offset * TR::word_size))),
       fields->head);
   }
 }
@@ -291,7 +294,7 @@ TR::ExpAndTy FieldVar::Translate(S::Table<E::EnvEntry> *venv,
             new T::BinopExp(T::PLUS_OP, ret.exp->UnEx(), new T::ConstExp(offset)))),
         cur->head->ty);
     }
-    offset -= TR::word_size;
+    offset += TR::word_size;
   }
   errormsg.Error(this->pos, "field %s doesn't exist", this->sym->Name().c_str());
   return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
@@ -318,7 +321,11 @@ TR::ExpAndTy SubscriptVar::Translate(S::Table<E::EnvEntry> *venv,
   }
   return TR::ExpAndTy(
     new TR::ExExp(new T::MemExp(
-      new T::BinopExp(T::PLUS_OP, ret.exp->UnEx(), sub.exp->UnEx()))),
+      new T::BinopExp(T::PLUS_OP,
+        ret.exp->UnEx(),
+        new T::BinopExp(
+          T::BinOp::MUL_OP, sub.exp->UnEx(),
+          new T::ConstExp(TR::word_size))))),
     static_cast<TY::ArrayTy *>(ret.ty)->ty);
 }
 
@@ -347,10 +354,26 @@ TR::ExpAndTy StringExp::Translate(S::Table<E::EnvEntry> *venv,
                                   S::Table<TY::Ty> *tenv, TR::Level *level,
                                   TEMP::Label *label) const
 {
-  TEMP::Label *lb = TEMP::NewLabel();
-  F::StringFrag *sf = new F::StringFrag(lb, s);
-  F::FragAllocator::appendFrag(sf);
-  return TR::ExpAndTy(new TR::ExExp(new T::NameExp(lb)), TY::StringTy::Instance());
+  T::Exp *loc = nullptr;
+  // TODO modify this impl, call strncmp in OpExp
+  // deal with chars(length==1 strings), make them support equal ops
+  // refer to __wrap_getchar in runtime.c
+
+  // string struct has a minimal length of 5
+  // which should be 8 considering word alignment
+  static constexpr int char_entry_size = TR::word_size;
+  if(s.length() == 1)
+    loc = new T::BinopExp(T::PLUS_OP,
+      new T::NameExp(TEMP::NamedLabel("consts")),
+      new T::ConstExp(s[0] * char_entry_size));
+  else
+  {
+    TEMP::Label *lb = TEMP::NewLabel();
+    F::StringFrag *sf = new F::StringFrag(lb, s);
+    F::FragAllocator::appendFrag(sf);
+    loc = new T::NameExp(lb);
+  }
+  return TR::ExpAndTy(new TR::ExExp(loc), TY::StringTy::Instance());
 }
 
 TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
@@ -366,25 +389,28 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
     errormsg.Error(this->pos, "%s is not a function.", this->func);
   else
   {
+    TY::TyList *formals = fun->formals;
+    A::ExpList *actuals = this->args;
+    T::ExpList *params_prehead = new T::ExpList(nullptr, nullptr);
+    T::ExpList *params_tail = params_prehead;
     // find static link first
-    T::Exp *static_link = level->frame->getFramePointerExp();
-    TR::Level *static_container = level->parent;
-    while (static_container && static_container != fun->level->parent)
-    {
-      // relative to current stack frame
-      // TODO figure this out
-      static_link = new T::MemExp(
-          new T::BinopExp(T::PLUS_OP, static_link, new T::ConstExp(-TR::word_size)));
-      static_container = static_container->parent;
+    // insert static link as first parameter
+    // do not add static link for external functions
+    if(fun->level->parent != nullptr) {
+      T::Exp *static_link = level->frame->getFramePointerExp();
+      TR::Level *static_container = level;
+      while (static_container && static_container != fun->level->parent)
+      {
+        static_link = new T::MemExp(
+            new T::BinopExp(T::PLUS_OP, static_link, new T::ConstExp(-TR::word_size)));
+        static_container = static_container->parent;
+      }
+      params_tail = params_tail->tail = new T::ExpList(static_link, nullptr);
     }
     // if static container is nullptr, then reached root
     // assert(static_container != nullptr);
     // check params, and make ExpList the same time
-    TY::TyList *formals = fun->formals;
-    A::ExpList *actuals = this->args;
-    // insert static link as first parameter
-    T::ExpList *params_head = new T::ExpList(static_link, nullptr);
-    T::ExpList *params_tail = params_head;
+    
     while (formals && actuals)
     {
       // keep parsing formal list even if there's a mismatch
@@ -402,8 +428,14 @@ TR::ExpAndTy CallExp::Translate(S::Table<E::EnvEntry> *venv,
     else if (actuals != nullptr)
       errormsg.Error(this->pos, "too many params in function %s", this->func->Name().c_str());
     // no error up till now
-    return TR::ExpAndTy(
-        new TR::ExExp(new T::CallExp(new T::NameExp(this->func), params_head)), fun->result);
+    if(fun->level->parent)
+      return TR::ExpAndTy(
+          new TR::ExExp(new T::CallExp(new T::NameExp(this->func), params_prehead->tail)),
+          fun->result);
+    else
+      return TR::ExpAndTy(
+          new TR::ExExp(level->frame->externalCall(this->func->Name(), params_prehead->tail)),
+          fun->result);
   }
   return TR::ExpAndTy(nullptr, TY::VoidTy::Instance());
 }
@@ -576,7 +608,7 @@ TR::ExpAndTy SeqExp::Translate(S::Table<E::EnvEntry> *venv,
   A::ExpList *exps = this->seq;
   if (exps)
   {
-    T::SeqStm *head = nullptr;
+    T::EseqExp *head = nullptr;
     TR::ExpAndTy ret_value = exps->head->Translate(venv, tenv, level, label);
     TY::Ty *final_type = ret_value.ty;
     if(exps->tail == nullptr) {
@@ -585,22 +617,22 @@ TR::ExpAndTy SeqExp::Translate(S::Table<E::EnvEntry> *venv,
       return TR::ExpAndTy(ret_value.exp, final_type);
     }
     // construct list header
-    head = new T::SeqStm(ret_value.exp->UnNx(), nullptr);
+    head = new T::EseqExp(ret_value.exp->UnNx(), nullptr);
     exps = exps->tail;
-    T::SeqStm *tail = head;
+    T::EseqExp *tail = head;
     // construct list in the middle
     for (; exps->tail; exps = exps->tail)
     {
       ret_value = exps->head->Translate(venv, tenv, level, label);
-      T::SeqStm *new_tail = new T::SeqStm(ret_value.exp->UnNx(), nullptr);
-      tail->right = new_tail;
+      T::EseqExp *new_tail = new T::EseqExp(ret_value.exp->UnNx(), nullptr);
+      tail->exp = (T::Exp *)new_tail;
       tail = new_tail;
     }
     // construct list tail
     ret_value = exps->head->Translate(venv, tenv, level, label);
-    tail->right = ret_value.exp->UnNx();
+    tail->exp = ret_value.exp->UnEx();
     final_type = ret_value.ty;
-    return TR::ExpAndTy(new TR::NxExp(head), final_type);
+    return TR::ExpAndTy(new TR::ExExp(head), final_type);
   }
   else
   {
@@ -736,11 +768,12 @@ TR::ExpAndTy WhileExp::Translate(S::Table<E::EnvEntry> *venv,
   TR::do_patch(test_cx.trues, body_label);
   TR::do_patch(test_cx.falses, done_label);
   T::Stm *s =
+    new T::SeqStm(new T::LabelStm(test_label),
       new T::SeqStm(test_cx.stm,
         new T::SeqStm(new T::LabelStm(body_label),
           new T::SeqStm(body_eat.exp->UnNx(),
             new T::SeqStm(new T::JumpStm(new T::NameExp(test_label), new TEMP::LabelList(test_label, nullptr)),
-              new T::LabelStm(done_label)))));
+              new T::LabelStm(done_label))))));
   return TR::ExpAndTy(new TR::NxExp(s), TY::VoidTy::Instance());
 }
 
@@ -802,6 +835,7 @@ TR::ExpAndTy ForExp::Translate(S::Table<E::EnvEntry> *venv,
   }
   // loop variable initial assignment
   T::Stm *loopvar_init = new T::MoveStm(loopvar->UnEx(), lo_eat.exp->UnEx());
+  T::Stm *limit_init = new T::MoveStm(limit->UnEx(), hi_eat.exp->UnEx());
   // test if lo <= hi before first iteration
   T::Stm* check_lo_hi = new T::CjumpStm(T::LT_OP, loopvar->UnEx(), limit->UnEx(),
       body_label, done_label);
@@ -815,11 +849,12 @@ TR::ExpAndTy ForExp::Translate(S::Table<E::EnvEntry> *venv,
         new T::SeqStm(loopvar_inc,
           new T::JumpStm(new T::NameExp(body_label), new TEMP::LabelList(body_label, nullptr)))));
   T::Stm* ret = new T::SeqStm(loopvar_init,
-    new T::SeqStm(check_lo_hi,
-      new T::SeqStm(new T::LabelStm(body_label),
-        new T::SeqStm(body_eat.exp->UnNx(),
-          new T::SeqStm(test,
-            new T::LabelStm(done_label))))));
+    new T::SeqStm(limit_init,
+      new T::SeqStm(check_lo_hi,
+        new T::SeqStm(new T::LabelStm(body_label),
+          new T::SeqStm(body_eat.exp->UnNx(),
+            new T::SeqStm(test,
+              new T::LabelStm(done_label)))))));
   venv->EndScope();
   tenv->EndScope();
   return TR::ExpAndTy(new TR::NxExp(ret), TY::VoidTy::Instance());
@@ -839,12 +874,20 @@ TR::ExpAndTy LetExp::Translate(S::Table<E::EnvEntry> *venv,
 {
   venv->BeginScope();
   tenv->BeginScope();
+  T::EseqExp *prehead = new T::EseqExp(nullptr, nullptr);
+  T::EseqExp *tail = prehead;
   for (A::DecList *decs = this->decs; decs; decs = decs->tail)
-    decs->head->Translate(venv, tenv, level, label);
+  {
+    TR::Exp *r = decs->head->Translate(venv, tenv, level, label);
+    if(r == nullptr) continue;
+    tail->exp = (T::Exp *)(new T::EseqExp(r->UnNx(), nullptr));
+    tail = (T::EseqExp *)tail->exp;
+  }
   TR::ExpAndTy ret = this->body->Translate(venv, tenv, level, label);
+  tail->exp = ret.exp->UnEx();
   venv->EndScope();
   tenv->EndScope();
-  return ret;
+  return TR::ExpAndTy(new TR::ExExp(prehead->exp), ret.ty);
 }
 
 TR::ExpAndTy ArrayExp::Translate(S::Table<E::EnvEntry> *venv,
