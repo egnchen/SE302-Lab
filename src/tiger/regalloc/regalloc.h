@@ -4,6 +4,8 @@
 #include "tiger/codegen/assem.h"
 #include "tiger/frame/frame.h"
 #include "tiger/frame/temp.h"
+#include "tiger/liveness/flowgraph.h"
+#include "tiger/liveness/liveness.h"
 #include <set>
 
 namespace RA {

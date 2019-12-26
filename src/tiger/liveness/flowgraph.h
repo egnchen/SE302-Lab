@@ -5,15 +5,22 @@
 #include "tiger/frame/frame.h"
 #include "tiger/frame/temp.h"
 #include "tiger/util/graph.h"
+#include "tiger/util/table.h"
+#include "tiger/translate/tree.h"
+#include <cstring>
+#include <vector>
 
 namespace FG {
 
-TEMP::TempList* Def(G::Node<AS::Instr>* n);
-TEMP::TempList* Use(G::Node<AS::Instr>* n);
+typedef G::Node<AS::Instr> InstrNode;
+typedef G::Graph<AS::Instr> FlowGraph;
 
-bool IsMove(G::Node<AS::Instr>* n);
+TEMP::TempList* Def(InstrNode* n);
+TEMP::TempList* Use(InstrNode* n);
 
-G::Graph<AS::Instr>* AssemFlowGraph(AS::InstrList* il, F::Frame* f);
+bool IsMove(InstrNode* n);
+
+FlowGraph* AssemFlowGraph(AS::InstrList* il, F::Frame* f);
 
 }  // namespace FG
 

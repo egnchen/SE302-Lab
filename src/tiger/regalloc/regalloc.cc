@@ -130,7 +130,7 @@ AS::InstrList *rewriteProgram(F::Frame *f, AS::InstrList *il,
 }
 
 Result RegAlloc(F::Frame* f, AS::InstrList* il) {
-  // lab5: escape all registers
+  // lab6: real stuff
   AS::InstrList *ret = il;
   do
   {
