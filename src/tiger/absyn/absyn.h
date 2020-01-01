@@ -536,7 +536,7 @@ class Field {
   bool escape;
 
   Field(int pos, S::Symbol *name, S::Symbol *typ)
-      : pos(pos), name(name), typ(typ), escape(true) {}
+      : pos(pos), name(name), typ(typ), escape(false) {}
 
   void Print(FILE *out, int d) const;
 };

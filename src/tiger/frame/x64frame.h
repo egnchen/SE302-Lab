@@ -6,6 +6,7 @@
 #include "tiger/codegen/assem.h"
 #include "tiger/frame/frame.h"
 #include <string>
+#include <set>
 
 namespace F {
 
@@ -23,10 +24,13 @@ class InFrameAccess : public Access {
 class InRegAccess : public Access {
  public:
   TEMP::Temp* reg;
+  T::TempExp *exp;
 
-  InRegAccess(TEMP::Temp* reg) : Access(INREG), reg(reg) {}
+  InRegAccess(TEMP::Temp* reg) : Access(INREG), reg(reg) {
+    exp = new T::TempExp(reg);
+  }
   T::Exp *toExp(T::Exp *framePtr) const {
-    return new T::TempExp(reg);
+    return exp;
   }
 };
 
@@ -67,20 +71,25 @@ public:
   static TEMP::TempList *const caller_saved;
 
   // for register saving
-  static TEMP::Temp *srbx, *srbp, *sr12, *sr13, *sr14, *sr15;
+  static TEMP::Temp *srbx, *srbp, *srdi, *srsi, *sr12, *sr13, *sr14, *sr15;
 
   // for register naming
   static TEMP::Map *getTempMap();
 
   // for utilities
-  static const TEMP::Temp * const all_regs[16];
+  static const std::set<TEMP::Temp *> all_regs;
+  static const std::set<TEMP::Temp *> gp_regs;
+  static const int gp_regs_count;
 
   X64Frame(TEMP::Label *name): Frame(name) {}
   X64Frame(TEMP::Label *name, U::BoolList *formals);
   ~X64Frame() {}
-  Access *allocSpace(unsigned byte_count) override {
-    size += byte_count;
-    return new InFrameAccess(-size);
+  Access *allocSpace(unsigned byte_count, bool in_frame=true) override {
+    if(in_frame) {
+      size += byte_count;
+      return new InFrameAccess(-size);
+    } else 
+      return new InRegAccess(TEMP::Temp::NewTemp());
   }
   
   T::Exp *getFramePointerExp() const override { return new T::TempExp(rbp); }

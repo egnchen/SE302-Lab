@@ -402,9 +402,9 @@ TEMP::Temp *munchExp(T::Exp *exp, ASManager &a, const F::Frame *f)
       T::CallExp *call_exp = (T::CallExp *)exp;
       assert(call_exp->fun->kind == T::Exp::NAME);
       T::NameExp *fun_exp = (T::NameExp *)(call_exp->fun);
-      munchArgs(call_exp->args, a, f);
+      TEMP::TempList *args = munchArgs(call_exp->args, a, f);
       a.emit(new AS::OperInstr(get_x8664_callq(fun_exp->name->Name()),
-        ((F::X64Frame *)f)->caller_saved, nullptr, nullptr));
+        ((F::X64Frame *)f)->caller_saved, args, nullptr));
       a.emit(new AS::MoveInstr(get_x8664_movq_temp(),
         new TL(r, nullptr), new TL(((F::X64Frame *)f)->rax, nullptr)));
       break;
@@ -418,22 +418,27 @@ TEMP::Temp *munchExp(T::Exp *exp, ASManager &a, const F::Frame *f)
   return r;
 }
 
-void munchArgs(T::ExpList *args, ASManager &a, const F::Frame *f)
+TEMP::TempList *munchArgs(T::ExpList *args, ASManager &a, const F::Frame *f)
 {
   int i = 0;
   F::X64Frame *fr = (F::X64Frame *)f;
+  TEMP::TempList *prehead = new TEMP::TempList(nullptr, nullptr);
+  TEMP::TempList *tail = prehead;
   while(args)
   {
     TEMP::Temp *arg = munchExp(args->head, a, f);
-    if(i < fr->param_reg_count)
+    if(i < fr->param_reg_count) {
       a.emit(new AS::MoveInstr(get_x8664_movq_temp(),
         new TL(fr->param_regs[i], nullptr), new TL(arg, nullptr)));
+      tail = tail->tail = new TEMP::TempList(fr->param_regs[i], nullptr);
+    }
     else
       a.emit(new AS::OperInstr(get_x8664_pushq(),
         nullptr, new TL(arg, nullptr), nullptr));
     i++;
     args = args->tail;
   }
+  return prehead->tail;
 }
 
 AS::InstrList *Codegen(F::Frame* f, T::StmList* stmList) {

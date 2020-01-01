@@ -15,15 +15,15 @@ FragList *FragAllocator::frag_head = nullptr;
 // pre-allocate all these registers
 TEMP::Temp *const X64Frame::rsp = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::rbp = TEMP::Temp::NewTemp();
+
+TEMP::Temp *const X64Frame::rax = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rcx = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rdx = TEMP::Temp::NewTemp();
+TEMP::Temp *const X64Frame::rbx = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::rdi = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::rsi = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::rdx = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::rcx = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::r8  = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::r9  = TEMP::Temp::NewTemp();
-TEMP::Temp *const X64Frame::rax = TEMP::Temp::NewTemp();
-
-TEMP::Temp *const X64Frame::rbx = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::r10 = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::r11 = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::r12 = TEMP::Temp::NewTemp();
@@ -31,30 +31,42 @@ TEMP::Temp *const X64Frame::r13 = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::r14 = TEMP::Temp::NewTemp();
 TEMP::Temp *const X64Frame::r15 = TEMP::Temp::NewTemp();
 
+
+
+// for onEnter & onExit only
 TEMP::Temp *X64Frame::srbx,
   *X64Frame::srbp,
+  *X64Frame::srdi,
+  *X64Frame::srsi,
   *X64Frame::sr12,
   *X64Frame::sr13,
   *X64Frame::sr14,
   *X64Frame::sr15;
 
 // for passing parameters
-TEMP::Temp *const X64Frame::param_regs[6] = {
-  rdi, rsi, rdx, rcx, r8, r9
-};
-
-const TEMP::Temp *const X64Frame::all_regs[16] = 
+const std::set<TEMP::Temp *> X64Frame::all_regs = 
 {
   rdi, rsi, rdx, rcx, rax, rbx, rbp, rsp,
   r8, r9, r10, r11, r12, r13, r14, r15
 };
 
+TEMP::Temp *const X64Frame::param_regs[6] = {
+  rdi, rsi, rdx, rcx, r8, r9
+};
+
+const std::set<TEMP::Temp *> X64Frame::gp_regs =
+{
+  rax, rbx, rcx, rdx, rdi, rsi, r8,
+  r9, r10, r11, r12, r13, r14, r15
+};
+
+const int X64Frame::gp_regs_count = gp_regs.size();
+
 // caller saved registers
 typedef TEMP::TempList TL;
 TL *const X64Frame::caller_saved =
-  new TL(rax, new TL(rdi, new TL(rsi,
-    new TL(rdx, new TL(rcx,
-      new TL(r8, new TL(r9, nullptr)))))));
+  new TL(rax, new TL(rcx, new TL(rdx, new TL(rdi, new TL(rsi, 
+      new TL(r8, new TL(r9, new TL(r10, new TL(r11, nullptr)))))))));
 
 // temp map
 TEMP::Map *X64Frame::getTempMap()
@@ -99,8 +111,6 @@ X64Frame::X64Frame(TEMP::Label *name, U::BoolList *formals)
   int param_cnt = 0;
   int formal_mem_offset = TR::word_size;  // skip return address
   while(formals) {
-    // for now, all params are passed in stack
-    assert(formals->head == true);
     if(formals->head == true) {
       // escaped, allocate new space on stack
       F::Access *acc = allocSpace(TR::word_size);

@@ -13,9 +13,6 @@
 #include "tiger/semant/types.h"
 #include "tiger/util/util.h"
 
-// note that in lab5 there's no escape analysis
-// so all variables are put into frame
-
 // all declarations are moved to header file here.
 
 extern EM::ErrorMsg errormsg;
@@ -123,7 +120,6 @@ Level* Level::NewLevel(
     Level* parent, TEMP::Label* name, U::BoolList* formals)
 {
   // add static link as first parameter
-  // for now, all params are escaped
   formals = new U::BoolList(true, formals);
   Level* ret = new Level(F::NewFrame(name, formals), parent);
   return ret;
@@ -158,12 +154,7 @@ Level* Outermost()
 // allocate space in level
 TR::Access* Level::AllocateLocal(bool escape, unsigned byte_count)
 {
-  assert(escape == true);
-  if (escape) {
-    return new TR::Access(this, frame->allocSpace(byte_count));
-  } else {
-    return nullptr;
-  }
+  return new TR::Access(this, frame->allocSpace(byte_count, escape));
 }
 
 TR::AccessList* Level::getFormals()
@@ -217,7 +208,6 @@ inline TR::Exp* Access::toExp()
 
 F::FragList* TranslateProgram(A::Exp* root)
 {
-  // TODO: Put your codes here (lab5).
   assert(root->kind == A::Exp::LET);
   TR::ExpAndTy ret = root->Translate(E::BaseVEnv(), E::BaseTEnv(), Outermost(), nullptr);
   F::FragAllocator::appendFrag(new F::ProcFrag(ret.exp->UnNx(), Outermost()->frame));
@@ -751,7 +741,7 @@ TR::ExpAndTy ForExp::Translate(S::Table<E::EnvEntry>* venv,
   venv->BeginScope();
   tenv->BeginScope();
   // allocate loopvar in frame
-  E::VarEntry* loopvar_entry = new E::VarEntry(level->AllocateLocal(true), TY::IntTy::Instance(), true);
+  E::VarEntry* loopvar_entry = new E::VarEntry(level->AllocateLocal(false), TY::IntTy::Instance(), true);
   venv->Enter(var, loopvar_entry);
   // allocate space for limit variable too, but don't update venv.
   TR::Exp* limit = new TR::ExExp(new T::TempExp(TEMP::Temp::NewTemp()));
@@ -891,9 +881,8 @@ TR::Exp* FunctionDec::Translate(S::Table<E::EnvEntry>* venv,
     // construct bool list
     U::BoolList* bool_list_prehead = new U::BoolList(0, nullptr);
     U::BoolList* bool_list_tail = bool_list_prehead;
-    for (TY::TyList* ty_cur = formal_types; ty_cur; ty_cur = ty_cur->tail)
-      // assume all params are escaped now
-      bool_list_tail = bool_list_tail->tail = new U::BoolList(true, nullptr);
+    for (A::FieldList *cur = func->params; cur; cur = cur->tail)
+      bool_list_tail = bool_list_tail->tail = new U::BoolList(cur->head->escape, nullptr);
     // make new level
     TR::Level* new_level = TR::Level::NewLevel(level, func->name, bool_list_prehead->tail);
     // seems unnecessarily, but I'm not sure...
@@ -963,9 +952,8 @@ TR::Exp* VarDec::Translate(S::Table<E::EnvEntry>* venv, S::Table<TY::Ty>* tenv,
     errormsg.Error(this->pos, "init should not be nil without type specified");
     return nullptr;
   }
-  // allocate space in frame
   // insert it into venv
-  TR::Access* acc = level->AllocateLocal(true);
+  TR::Access* acc = level->AllocateLocal(this->escape);
   venv->Enter(this->var, new E::VarEntry(acc, init_eat.ty));
   // translation
   // make the assignment

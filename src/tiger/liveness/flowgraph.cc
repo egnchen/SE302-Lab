@@ -1,4 +1,5 @@
 #include "tiger/liveness/flowgraph.h"
+#include <iostream>
 
 namespace FG {
 
@@ -53,13 +54,16 @@ FlowGraph* AssemFlowGraph(AS::InstrList* il, F::Frame* f)
     auto cur = g->NewNode(instr);
     if (prev)
       g->AddEdge(prev, cur);
+    if (instr->kind == AS::Instr::OPER &&
+      ((AS::OperInstr*)instr)->assem[0] == 'j') {
+      jmps.push_back(cur);
+      if(strncmp(((AS::OperInstr *)instr)->assem.c_str(), "jmp", 3) == 0) {
+        prev = nullptr;
+        continue;
+      }
+    }
     if (instr->kind == AS::Instr::LABEL)
       label_table.Enter(((AS::LabelInstr*)instr)->label, cur);
-    else if (instr->kind == AS::Instr::OPER && strncmp(((AS::OperInstr*)instr)->assem.c_str(), "jmp", 3) == 0) {
-      jmps.push_back(cur);
-      prev = nullptr;
-      continue;
-    }
     prev = cur;
   }
   // connect jump & destinations

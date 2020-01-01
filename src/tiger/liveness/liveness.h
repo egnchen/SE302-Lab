@@ -19,7 +19,7 @@ private:
   std::set<TEMP::Temp *> in, out;
 public:
   static void reset() { flag = false; }
-  static bool changed() { return !flag; }
+  static bool changed() { return flag; }
   inline bool inIn(TEMP::Temp *t) { return in.find(t) != in.end(); }
   inline bool inOut(TEMP::Temp *t) { return out.find(t) != out.end(); }
   inline void insertIn(TEMP::Temp *t) { if(in.insert(t).second) flag = true; }
@@ -35,9 +35,11 @@ class MoveList {
  public:
   TNode *src, *dst;
   MoveList* tail;
+  bool valid;
+  bool frozen;
 
   MoveList(TNode *src, TNode* dst, MoveList* tail)
-      : src(src), dst(dst), tail(tail) {}
+      : src(src), dst(dst), tail(tail), valid(true), frozen(false) {}
 };
 
 class LiveGraph {

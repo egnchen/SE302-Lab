@@ -1,4 +1,5 @@
 #include "tiger/escape/escape.h"
+#include <iostream>
 
 /*
  * Escape analysis
@@ -126,8 +127,12 @@ void traverseVar(EEnv* env, int depth, A::Var* v)
   {
     case A::Var::SIMPLE: {
       EscapeEntry *ee = env->Look(((A::SimpleVar *)v)->sym);
-      if(ee->depth < depth)
+      if(ee->depth < depth) {
+        std::cout << "Escaping ";
+        v->Print(stdout, depth);
+        std::cout << std::endl;
         *ee->escape = true;
+      }
       break;
     }
     case A::Var::FIELD:

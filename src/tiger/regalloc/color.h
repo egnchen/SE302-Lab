@@ -4,17 +4,18 @@
 #include "tiger/frame/temp.h"
 #include "tiger/liveness/liveness.h"
 #include "tiger/util/graph.h"
+#include "tiger/frame/x64frame.h"
+#include "tiger/util/table.h"
 
 namespace COL {
 
 class Result {
  public:
   TEMP::Map* coloring;
-  TEMP::TempList* spills;
+  TEMP::TempList *spills;
 };
 
-Result Color(G::Graph<TEMP::Temp>* ig, TEMP::Map* initial, TEMP::TempList* regs,
-             LIVE::MoveList* moves);
+Result Color(FG::FlowGraph *flow_graph);
 
 }  // namespace COL
 

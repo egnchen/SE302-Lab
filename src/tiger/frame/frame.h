@@ -52,9 +52,9 @@ public:
   virtual ~Frame() {}
 
   // default to allocate a word
-  virtual Access *allocSpace(unsigned byte_count) = 0;
+  virtual Access *allocSpace(unsigned byte_count, bool in_frame=true) = 0;
   // frame pointer
-  virtual  T::Exp *getFramePointerExp() const = 0;
+  virtual T::Exp *getFramePointerExp() const = 0;
   virtual TEMP::Temp *getFramePointer() const = 0;
   // stack pointer
   virtual T::Exp *getStackPointerExp() const = 0;

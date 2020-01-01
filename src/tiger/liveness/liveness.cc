@@ -1,5 +1,7 @@
 #include "tiger/liveness/liveness.h"
+#include "tiger/frame/x64frame.h"
 #include <map>
+#include <iostream>
 
 namespace LIVE {
 
@@ -52,7 +54,7 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph)
 
   // calculate in & out sets for each instruction
   do {
-    LiveList::reset(); // reset flag
+    LiveList::reset(); // reset change flag
     for (auto nl = flowgraph->Nodes(); nl; nl = nl->tail) {
       FG::InstrNode* in = nl->head;
       LiveList* ll = live_table.Look(in);
@@ -61,14 +63,13 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph)
        * out[n] = \cup{\forall s \in succ[n] in[s]}
        */
       // use rule
-      for (auto uses = FG::Use(in); uses; uses = uses->tail)
+      for (auto uses = FG::Use(in); uses; uses = uses->tail) {
         ll->insertIn(uses->head);
+      }
       // def rule
-      for (TEMP::Temp* t : ll->getOut())
+      for (auto t : ll->getOut())
         if (!inDef(in, t))
           ll->insertIn(t);
-        else
-          assert(!ll->inIn(t)); // for debug
       // backprop
       for (auto it = in->Pred(); it; it = it->tail) {
         LiveList* prev_ll = live_table.Look(it->head);
@@ -91,22 +92,30 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph)
     for (auto defs = FG::Def(in); defs; defs = defs->tail)
       if (temp_map.find(defs->head) == temp_map.end())
         temp_map[defs->head] = graph->NewNode(defs->head);
-    for (auto uses = FG::Def(in); uses; uses = uses->tail)
+    for (auto uses = FG::Use(in); uses; uses = uses->tail)
       if (temp_map.find(uses->head) == temp_map.end())
         temp_map[uses->head] = graph->NewNode(uses->head);
   }
+  // remove rsp, it is not a gpreg
+  temp_map.erase(F::X64Frame::rsp);
 
   // add inteference edges
+  auto hard_temp = F::X64Frame::getTempMap();
   for (auto nl = flowgraph->Nodes(); nl; nl = nl->tail) {
     FG::InstrNode* in = nl->head;
     LiveList* ll = live_table.Look(in);
     bool is_move = FG::IsMove(in);
     for (auto defs = FG::Def(in); defs; defs = defs->tail) {
+      if(defs->head == F::X64Frame::rsp)
+        continue;
       for (TEMP::Temp* t : ll->getOut()) {
-        if (defs->head == t || (is_move && inDst(in, t)))
+        if (defs->head == t || (is_move && inDst(in, t)) ||
+          t == F::X64Frame::rsp)
+          continue;
+        if (hard_temp->Look(defs->head) && hard_temp->Look(t))
+          // two hard registers, cannot merge anyway
           continue;
         graph->AddEdge(temp_map[defs->head], temp_map[t]);
-        graph->AddEdge(temp_map[t], temp_map[defs->head]);
       }
     }
   }
@@ -120,7 +129,6 @@ LiveGraph Liveness(G::Graph<AS::Instr>* flowgraph)
     if (in->NodeInfo()->kind != AS::Instr::MOVE)
       continue;
     AS::MoveInstr* instr = (AS::MoveInstr*)in->NodeInfo();
-    // construct src list and dst list
     // assume that src & dst are both single element lists
     assert(instr->src->tail == nullptr);
     assert(instr->dst->tail == nullptr);

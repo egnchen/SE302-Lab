@@ -58,7 +58,7 @@ std::string get_x8664_callq(std::string label);
 
 void munchStm(T::Stm *, ASManager &, const F::Frame *);
 TEMP::Temp *munchExp(T::Exp *, ASManager &, const F::Frame *);
-void munchArgs(T::ExpList *, ASManager &, const F::Frame *);
+TEMP::TempList *munchArgs(T::ExpList *, ASManager &, const F::Frame *);
 
 AS::InstrList* Codegen(F::Frame* f, T::StmList* stmList);
 }
