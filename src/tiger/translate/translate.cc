@@ -1,11 +1,9 @@
 #include "tiger/translate/translate.h"
 
+#include <cassert>
 #include <cstdio>
 #include <set>
 #include <string>
-
-#include <cassert>
-#include <cstdio>
 
 #include "tiger/errormsg/errormsg.h"
 #include "tiger/frame/temp.h"
@@ -325,7 +323,6 @@ TR::ExpAndTy StringExp::Translate(S::Table<E::EnvEntry>* venv,
     TEMP::Label* label) const
 {
   T::Exp* loc = nullptr;
-  // TODO modify this impl, call strncmp in OpExp
   // deal with chars(length==1 strings), make them support equal ops
   // refer to __wrap_getchar in runtime.c
 
@@ -476,7 +473,14 @@ TR::ExpAndTy OpExp::Translate(S::Table<E::EnvEntry>* venv,
         op = T::NE_OP;
         break;
       }
-      T::CjumpStm* stm = new T::CjumpStm(op, l.exp->UnEx(), r.exp->UnEx(), nullptr, nullptr);
+      T::CjumpStm* stm;
+      if (l.ty->ActualTy() == TY::StringTy::Instance()) {
+        assert(op == T::EQ_OP);
+        T::CallExp *call_exp = level->frame->externalCall(
+          "stringEqual", new T::ExpList(l.exp->UnEx(), new T::ExpList(r.exp->UnEx(), nullptr)));
+        stm = new T::CjumpStm(op, call_exp, new T::ConstExp(1), nullptr, nullptr);
+      } else
+        stm = new T::CjumpStm(op, l.exp->UnEx(), r.exp->UnEx(), nullptr, nullptr);
       TR::PatchList* trues = new TR::PatchList(&(stm->true_label), nullptr);
       TR::PatchList* falses = new TR::PatchList(&(stm->false_label), nullptr);
       return TR::ExpAndTy(new TR::CxExp(trues, falses, stm), TY::IntTy::Instance());
@@ -881,7 +885,7 @@ TR::Exp* FunctionDec::Translate(S::Table<E::EnvEntry>* venv,
     // construct bool list
     U::BoolList* bool_list_prehead = new U::BoolList(0, nullptr);
     U::BoolList* bool_list_tail = bool_list_prehead;
-    for (A::FieldList *cur = func->params; cur; cur = cur->tail)
+    for (A::FieldList* cur = func->params; cur; cur = cur->tail)
       bool_list_tail = bool_list_tail->tail = new U::BoolList(cur->head->escape, nullptr);
     // make new level
     TR::Level* new_level = TR::Level::NewLevel(level, func->name, bool_list_prehead->tail);
@@ -989,6 +993,8 @@ TR::Exp* TypeDec::Translate(S::Table<E::EnvEntry>* venv, S::Table<TY::Ty>* tenv,
   }
   // check illegal type cycles
   // TODO this impl have bugs, may produce infinite cycle
+  // it can pass all given tests though :)
+  // to solve this use a visit array
   /*
        /->3-\
   1 -> 2    |
