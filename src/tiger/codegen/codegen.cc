@@ -404,7 +404,8 @@ TEMP::Temp *munchExp(T::Exp *exp, ASManager &a, const F::Frame *f)
       T::NameExp *fun_exp = (T::NameExp *)(call_exp->fun);
       TEMP::TempList *args = munchArgs(call_exp->args, a, f);
       a.emit(new AS::OperInstr(get_x8664_callq(fun_exp->name->Name()),
-        ((F::X64Frame *)f)->caller_saved, args, nullptr));
+        ((F::X64Frame *)f)->caller_saved, nullptr, nullptr));
+      unMunchArgs(call_exp->args, a, f);
       a.emit(new AS::MoveInstr(get_x8664_movq_temp(),
         new TL(r, nullptr), new TL(((F::X64Frame *)f)->rax, nullptr)));
       break;
@@ -439,6 +440,19 @@ TEMP::TempList *munchArgs(T::ExpList *args, ASManager &a, const F::Frame *f)
     args = args->tail;
   }
   return prehead->tail;
+}
+
+void unMunchArgs(T::ExpList *args, ASManager &a, const F::Frame *f)
+{
+  int i = 0;
+  F::X64Frame *fr = (F::X64Frame *)f;
+  for(; args; i++, args = args->tail);
+  if(i > fr->param_reg_count) {
+    i -= fr->param_reg_count;
+    std::ostringstream ss;
+    ss << "subq $" << (i * TR::word_size) << " $rsp";
+    a.emit(new AS::OperInstr(ss.str(), nullptr, nullptr, nullptr));
+  }
 }
 
 AS::InstrList *Codegen(F::Frame* f, T::StmList* stmList) {
