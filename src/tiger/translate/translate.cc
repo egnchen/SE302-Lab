@@ -710,8 +710,7 @@ TR::ExpAndTy WhileExp::Translate(S::Table<E::EnvEntry>* venv,
   return TR::ExpAndTy(new TR::NxExp(s), TY::VoidTy::Instance());
 }
 
-// put it all together, for statement should be
-// translated into:
+// put it all together, for statement should be translated into:
 /*
 i = lo;                 # loopvar_init
 if(i > hi) goto done;   # check_lo_hi
@@ -992,7 +991,7 @@ TR::Exp* TypeDec::Translate(S::Table<E::EnvEntry>* venv, S::Table<TY::Ty>* tenv,
     old_ty->ty = new_ty;
   }
   // check illegal type cycles
-  // TODO this impl have bugs, may produce infinite cycle
+  // TODO this impl have bugs, may produce infinite cycle :(
   // it can pass all given tests though :)
   // to solve this use a visit array
   /*

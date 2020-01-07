@@ -4,6 +4,7 @@
 
 extern int tigermain();
 
+// bugfix: init should be long instead of int type
 long *initArray(int size, int init) {
   int i;
   long *a = (long *)malloc(size * sizeof(long));

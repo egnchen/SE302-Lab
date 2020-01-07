@@ -194,8 +194,8 @@ AS::InstrList *X64Frame::doProcEntryExit2(AS::InstrList *instr)
   // add a psudo instruction and modify liveness of registers
   // at the end of all assembly code
   static TEMP::TempList *return_sink =
-    new TEMP::TempList(getR0(), new TEMP::TempList(getReturnValue(),
-      new TEMP::TempList(getFramePointer(), nullptr)));
+    new TEMP::TempList(getReturnValue(),
+      new TEMP::TempList(getFramePointer(), nullptr));
   return AS::InstrList::Splice(instr,
     new AS::InstrList(
       new AS::OperInstr("", nullptr, return_sink, nullptr), nullptr));
@@ -217,7 +217,8 @@ AS::Proc *X64Frame::doProcEntryExit3(AS::InstrList *instr)
 
 void X64Frame::onEnter(CG::ASManager &a) const
 {
-  // save callee-save registers
+  // explicitly save callee-save register here
+  // this impl is a little hacky, but it gets the job done
   srbx = TEMP::Temp::NewTemp();
   // srbp = TEMP::Temp::NewTemp();
   sr12 = TEMP::Temp::NewTemp();
@@ -234,7 +235,7 @@ void X64Frame::onEnter(CG::ASManager &a) const
 
 void X64Frame::onReturn(CG::ASManager &a) const
 {
-  // restore them
+  // restore explicitly saved registers
   a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(rbx,NULL), new TEMP::TempList(srbx,NULL)));
   // a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(rbp,NULL), new TEMP::TempList(srbp,NULL)));
   a.emit(new AS::MoveInstr("movq `s0, `d0", new TEMP::TempList(r12,NULL), new TEMP::TempList(sr12,NULL)));
